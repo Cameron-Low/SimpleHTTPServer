@@ -41,8 +41,6 @@ int main() {
 	}
 
 	for (;;) {
-		printf("Waiting...\n");
-		
 		// Open connection to client
 		struct sockaddr clientAddress;
 		socklen_t sockStructLength;
@@ -60,31 +58,32 @@ int main() {
 		struct HTTPRequest request;
 		parseRequest(&request, buff);
 
-/*		for (int i  = 0; i < MAX_HEADERS ; i++) {
-			if (request.headers[i].name == NULL) break;
-			printf("%s: ", request.headers[i].name);
-			printf("%s\n", request.headers[i].value);
-		}
-
-*/		
-		char *response = "HTTP/1.1 200 Ok\nServer: Cameron\nContent-Type: text/html\nContent-Length: ";
+		char *response;
 
 		// Send the file
 		FILE *file = fopen(request.line.requestTarget, "r");
-		char *doc = parseFile(file);
-		char len[4];
-	   	
-		char *httpResp = malloc(sizeof(*httpResp) * (strlen(doc) + strlen(response) + 10));
-		strcpy(httpResp, response);
+		if (file == NULL) {
+			response = "HTTP/1.1 404 Page not Found\nServer: Cameron\nContent-Type: text/html\nContent-Length: 23\n\n<html>Not Found</hmtl>\n";
+			write(client_socket, response, strlen(response));
+		} else {
+			response = "HTTP/1.1 200 Ok\nServer: Cameron\nContent-Type: text/html\nContent-Length: ";
 
-		sprintf(len, "%lu", strlen(doc)+1);
-		strcat(httpResp, len);
-		strcat(httpResp, "\n");
-		strcat(httpResp, "\n");
-		strcat(httpResp, doc);
-		strcat(httpResp, "\n");
-		write(client_socket, httpResp, strlen(httpResp));
+			char *doc = parseFile(file);
+			char len[4];
+			
+			char *httpResp = malloc(sizeof(*httpResp) * (strlen(doc) + strlen(response) + 10));
+			strcpy(httpResp, response);
+
+			sprintf(len, "%lu", strlen(doc)+1);
+			strcat(httpResp, len);
+			strcat(httpResp, "\n\n");
+			strcat(httpResp, doc);
+			strcat(httpResp, "\n");
+			write(client_socket, httpResp, strlen(httpResp));
 		
+			free(httpResp);
+			fclose(file);
+		}
 		close(client_socket);
 	}
 }
@@ -124,7 +123,7 @@ void parseRequest(struct HTTPRequest *r, char *buf) {
 		struct HTTPHeader header;
 		header.name = strsep(&headerLine, ":");
 		
-		// Clean up header value	
+		// Clean up header value by removing whitespace
 		char *end;
 		while(isspace((unsigned char)* headerLine)) headerLine++;
 		end = headerLine + strlen(headerLine) - 1;
@@ -139,6 +138,7 @@ void parseRequest(struct HTTPRequest *r, char *buf) {
 	// Parse message
 	char *l = malloc(sizeof(*l) * MAX_REQUEST_LINE_LENGTH);
 	char *msg = l;
+	// Append the rest of the array to msg
 	for (int i = m; i < n; i++) {
 		memcpy(l, lines[i], strlen(lines[i]));
         l += strlen(lines[i]);
